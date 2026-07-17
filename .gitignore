@@ -20,8 +20,8 @@ Thumbs.db
 *.swo
 *~
 
-# Termux
-core
+# Termux core dumps
+/core
 
 # Environment
 .env
