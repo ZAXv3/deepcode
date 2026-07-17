@@ -140,10 +140,9 @@ async function main() {
     // Plain interactive mode
     await plainMode(orchestrator, values.agent as string);
   } else {
-    // Rich TUI (default)
-    const { DeepcodeTUI } = await import("../tui/app.js");
-    const tui = new DeepcodeTUI({ providers, orchestrator, tools });
-    await tui.start();
+    // Rich Ink TUI (default)
+    const { launchTUI } = await import("../tui/app.js");
+    launchTUI(providers, orchestrator, tools);
   }
 }
 
