@@ -8,12 +8,14 @@ import { BashTool } from "./shell/bash.js";
 import { WebFetchTool } from "./web/webfetch.js";
 import { WebSearchTool } from "./web/websearch.js";
 import { TodoWriteTool } from "./management/todowrite.js";
+import { SubagentTool } from "./agent/subagent.js";
+import { ModelDiscoveryTool } from "./agent/model-discovery.js";
 
 // ==========================================
 // Register All Built-in Tools
 // ==========================================
 
-export function registerBuiltinTools(registry: ToolRegistry): void {
+export function registerBuiltinTools(registry: ToolRegistry, orchestrator?: any, providers?: any): void {
   // File operations
   registry.register(new ReadTool());
   registry.register(new WriteTool());
@@ -32,4 +34,13 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
 
   // Management
   registry.register(new TodoWriteTool());
+
+  // Agent tools
+  const subagentTool = new SubagentTool();
+  subagentTool.orchestrator = orchestrator;
+  registry.register(subagentTool);
+
+  const modelDiscovery = new ModelDiscoveryTool();
+  modelDiscovery.providers = providers;
+  registry.register(modelDiscovery);
 }

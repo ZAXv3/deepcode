@@ -1,11 +1,11 @@
-import { Colors, Emojis, Spinner, ProgressBar, drawBox, drawLogo, drawStatusBar, InteractiveMenu, StreamingDisplay, clearScreen, prompt, confirm, sleep } from "./core.js";
+// ==========================================
+// Deepcode TUI v2 - Modern Terminal Interface
+// ==========================================
+
+import { c, clear, hideCursor, showCursor, banner, box, menu, prompt, statusLine, Spinner, StreamDisplay, onKey, sleep } from "./core.js";
 import { ProviderRegistry } from "../core/provider/index.js";
 import { AgentOrchestrator, AgentSession } from "../core/agent/orchestrator.js";
 import { ToolRegistry } from "../tools/index.js";
-
-// ==========================================
-// Deepcode TUI
-// ==========================================
 
 export interface TUIConfig {
   providers: ProviderRegistry;
@@ -17,100 +17,76 @@ export class DeepcodeTUI {
   private providers: ProviderRegistry;
   private orchestrator: AgentOrchestrator;
   private tools: ToolRegistry;
-  private currentSession: AgentSession | null = null;
-  private currentModel: string;
-  private currentAgent: string;
-  private isRunning = false;
+  private model: string;
+  private agent: string;
+  private session: AgentSession | null = null;
+  private totalTokens = 0;
 
   constructor(config: TUIConfig) {
     this.providers = config.providers;
     this.orchestrator = config.orchestrator;
     this.tools = config.tools;
-    this.currentModel = "anthropic/claude-sonnet-4-6";
-    this.currentAgent = "build";
+    this.model = "anthropic/claude-sonnet-4-6";
+    this.agent = "build";
   }
 
   // ==========================================
-  // Main Menu
+  // Main Entry
   // ==========================================
 
-  async showMainMenu(): Promise<void> {
-    clearScreen();
-    console.log(drawLogo());
+  async start() {
+    clear();
+    console.log(banner());
+    console.log(`${c.dim}  v0.2.0  │  Agentic Coding Assistant for Termux${c.reset}\n`);
 
-    while (this.isRunning) {
-      const menu = new InteractiveMenu({
-        title: `${Emojis.sparkles} Main Menu`,
+    // Show quick status
+    const providers = this.providers.listProviders();
+    const tools = this.tools.list().length;
+    console.log(statusLine([
+      { label: "Providers", value: providers.length ? providers.join(", ") : "none", color: c.green },
+      { label: "Tools", value: `${tools}`, color: c.cyan },
+      { label: "Model", value: this.model, color: c.yellow },
+    ]));
+    console.log();
+
+    // Check if we have API keys configured
+    if (providers.length === 0) {
+      console.log(`  ${c.yellow}⚠  No API keys configured. Set ANTHROPIC_API_KEY or use settings.${c.reset}\n`);
+    }
+
+    await this.mainLoop();
+  }
+
+  // ==========================================
+  // Main Loop
+  // ==========================================
+
+  private async mainLoop() {
+    while (true) {
+      const action = await menu({
+        title: "deepcode",
         items: [
-          {
-            label: "Start Chat",
-            value: "chat",
-            icon: Emojis.brain,
-            description: "Start a conversation with an AI agent",
-            color: Colors.green,
-          },
-          {
-            label: "Select Model",
-            value: "model",
-            icon: Emojis.gear,
-            description: "Choose which AI model to use",
-            color: Colors.cyan,
-          },
-          {
-            label: "Select Agent",
-            value: "agent",
-            icon: Emojis.robot,
-            description: "Choose an agent persona (build, plan, explore)",
-            color: Colors.yellow,
-          },
-          {
-            label: "View Tools",
-            value: "tools",
-            icon: Emojis.wrench,
-            description: "See available tools and their status",
-            color: Colors.magenta,
-          },
-          {
-            label: "Settings",
-            value: "settings",
-            icon: Emojis.gear,
-            description: "Configure Deepcode settings",
-            color: Colors.blue,
-          },
-          {
-            label: "Exit",
-            value: "exit",
-            icon: Emojis.door,
-            description: "Quit Deepcode",
-            color: Colors.red,
-          },
+          { label: "Chat", value: "chat", icon: "💬", desc: "Start a conversation with an AI agent", color: c.green },
+          { label: "Models", value: "models", icon: "🧠", desc: "Select or discover available models", color: c.cyan },
+          { label: "Agents", value: "agents", icon: "🤖", desc: "Choose an agent persona", color: c.magenta },
+          { label: "Tools", value: "tools", icon: "🔧", desc: "View available tools", color: c.yellow },
+          { label: "Settings", value: "settings", icon: "⚙️", desc: "Configure API keys and preferences", color: c.blue },
+          { label: "Exit", value: "exit", icon: "👋", desc: "Quit Deepcode", color: c.red },
         ],
-        columns: 2,
       });
 
-      const choice = await menu.show();
+      if (action === "__back__" || action === "exit") {
+        clear();
+        console.log(`\n  ${c.dim}Goodbye!${c.reset}\n`);
+        return;
+      }
 
-      switch (choice) {
-        case "chat":
-          await this.startChat();
-          break;
-        case "model":
-          await this.selectModel();
-          break;
-        case "agent":
-          await this.selectAgent();
-          break;
-        case "tools":
-          await this.showTools();
-          break;
-        case "settings":
-          await this.showSettings();
-          break;
-        case "exit":
-          this.isRunning = false;
-          clearScreen();
-          console.log(`\n${Colors.cyan}${Emojis.wave} Goodbye!${Colors.reset}\n`);
-          return;
+      switch (action) {
+        case "chat": await this.chatSession(); break;
+        case "models": await this.modelsMenu(); break;
+        case "agents": await this.agentsMenu(); break;
+        case "tools": await this.toolsMenu(); break;
+        case "settings": await this.settingsMenu(); break;
       }
     }
   }
@@ -119,323 +95,258 @@ export class DeepcodeTUI {
   // Chat Session
   // ==========================================
 
-  async startChat(): Promise<void> {
-    clearScreen();
-
-    // Show chat header
-    console.log(`\n${Colors.bold}${Colors.cyan}${Emojis.brain} Deepcode Chat${Colors.reset}`);
-    console.log(`${Colors.dim}Model: ${this.currentModel} | Agent: ${this.currentAgent}${Colors.reset}`);
-    console.log(`${Colors.dim}Type /help for commands, /quit to return to menu${Colors.reset}\n`);
+  private async chatSession() {
+    clear();
 
     // Create session
-    const spinner = new Spinner({ text: "Initializing session...", style: "dots" });
-    spinner.start();
-    const sessionId = this.orchestrator.createSession(this.currentAgent);
-    this.currentSession = this.orchestrator.getSession(sessionId)!;
-    await sleep(500);
-    spinner.stop("Session ready!");
+    const spin = new Spinner("Initializing session...");
+    spin.start();
+    const sessionId = this.orchestrator.createSession(this.agent);
+    this.session = this.orchestrator.getSession(sessionId)!;
+    await sleep(300);
+    spin.stop("Ready");
+
+    // Header
+    console.log(`\n  ${c.bold}Chat${c.reset}  ${c.dim}│${c.reset}  Model: ${c.cyan}${this.model}${c.reset}  ${c.dim}│${c.reset}  Agent: ${c.magenta}${this.agent}${c.reset}`);
+    console.log(`  ${c.dim}Type your message, /help for commands, /back to return${c.reset}\n`);
 
     // Chat loop
-    const readline = await import("readline");
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-
-    const askQuestion = (): Promise<string> => {
-      return new Promise((resolve) => {
-        rl.question(`${Colors.green}${Emojis.arrow}${Colors.reset} `, (answer) => {
-          resolve(answer.trim());
-        });
-      });
-    };
-
-    let running = true;
-    while (running) {
-      const input = await askQuestion();
+    while (true) {
+      const input = await prompt({ color: c.green });
 
       if (!input) continue;
 
       // Handle commands
       if (input.startsWith("/")) {
-        const [cmd] = input.slice(1).split(" ");
-
+        const cmd = input.slice(1).split(" ")[0];
         switch (cmd) {
-          case "quit":
+          case "back":
           case "exit":
           case "q":
-            running = false;
-            break;
+            return;
           case "help":
             this.showChatHelp();
-            break;
+            continue;
           case "clear":
-            clearScreen();
-            break;
+            clear();
+            console.log(`  ${c.dim}Chat cleared${c.reset}\n`);
+            continue;
           case "model":
-            await this.selectModel();
-            break;
+            console.log(`  ${c.dim}Current model: ${this.model}${c.reset}`);
+            continue;
           case "agent":
-            await this.selectAgent();
-            break;
-          case "status":
-            console.log(drawStatusBar({
-              model: this.currentModel,
-              agent: this.currentAgent,
-              tokens: this.currentSession?.messages?.length || 0,
-              session: sessionId,
-            }));
-            break;
-          default:
-            console.log(`${Colors.yellow}Unknown command: /${cmd}${Colors.reset}`);
+            console.log(`  ${c.dim}Current agent: ${this.agent}${c.reset}`);
+            continue;
         }
+        console.log(`  ${c.red}Unknown command: /${cmd}${c.reset}`);
         continue;
       }
 
-      // Process message with streaming
-      await this.processWithStreaming(input);
+      // Process message
+      await this.processMessage(input);
     }
-
-    rl.close();
   }
 
-  private async processWithStreaming(message: string): Promise<void> {
-    const spinner = new Spinner({
-      text: "Thinking...",
-      style: "brain",
-      color: Colors.magenta,
-    });
-
-    spinner.start();
+  private async processMessage(input: string) {
+    const spin = new Spinner("Thinking...");
+    spin.start();
 
     try {
-      // Simulate streaming delay
-      await sleep(800);
+      // Simulate processing delay for UX
+      await sleep(400);
 
       const response = await this.orchestrator.processMessage(
-        this.currentSession!.id,
-        message,
-        { model: this.currentModel }
+        this.session!.id,
+        input,
+        { model: this.model }
       );
 
-      spinner.stop();
+      spin.stop();
 
-      // Display response with streaming effect
-      await this.streamResponse(response);
-    } catch (error) {
-      spinner.fail(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      // Stream the response
+      const display = new StreamDisplay();
+      display.start();
+
+      const words = response.split(" ");
+      for (const word of words) {
+        display.append(word + " ");
+        await sleep(15 + Math.random() * 15);
+      }
+
+      display.finish();
+      console.log();
+    } catch (error: any) {
+      spin.fail(`Error: ${error.message || String(error)}`);
     }
   }
 
-  private async streamResponse(text: string): Promise<void> {
-    const display = new StreamingDisplay();
-    display.start();
-
-    // Stream with typewriter effect
-    const words = text.split(" ");
-    for (const word of words) {
-      display.append(word + " ");
-      await sleep(30 + Math.random() * 20);
-    }
-
-    display.finish();
-    console.log("\n");
-  }
-
-  private showChatHelp(): void {
-    const helpContent = `
-${Colors.bold}Chat Commands:${Colors.reset}
-  ${Colors.cyan}/help${Colors.reset}     Show this help message
-  ${Colors.cyan}/quit${Colors.reset}     Return to main menu
-  ${Colors.cyan}/clear${Colors.reset}    Clear screen
-  ${Colors.cyan}/model${Colors.reset}    Switch model
-  ${Colors.cyan}/agent${Colors.reset}    Switch agent
-  ${Colors.cyan}/status${Colors.reset}   Show current status
-`;
-
-    console.log(drawBox(helpContent, {
-      title: "Help",
-      color: Colors.blue,
-    }));
+  private showChatHelp() {
+    console.log(`
+  ${c.bold}Commands:${c.reset}
+    ${c.cyan}/help${c.reset}       Show this help
+    ${c.cyan}/back${c.reset}       Return to main menu
+    ${c.cyan}/clear${c.reset}      Clear screen
+    ${c.cyan}/model${c.reset}      Show current model
+    ${c.cyan}/agent${c.reset}      Show current agent
+`);
   }
 
   // ==========================================
-  // Model Selection
+  // Models Menu
   // ==========================================
 
-  async selectModel(): Promise<void> {
-    clearScreen();
-    console.log(`\n${Colors.bold}${Colors.cyan}${Emojis.gear} Select Model${Colors.reset}\n`);
-
+  private async modelsMenu() {
     const models = this.providers.listModels();
 
-    if (models.length === 0) {
-      console.log(`${Colors.yellow}No models available. Configure API keys first.${Colors.reset}`);
-      await prompt("Press Enter to continue...");
+    const items = models.map((m) => ({
+      label: m.fullId,
+      value: m.fullId,
+      icon: "🧠",
+      color: c.cyan,
+    }));
+
+    // Add test option
+    items.push({ label: "Test Provider Connection", value: "__test__", icon: "🔍", color: c.yellow });
+
+    if (items.length === 0) {
+      clear();
+      console.log(`\n  ${c.yellow}⚠  No models available. Configure API keys in settings.${c.reset}\n`);
+      await prompt({});
       return;
     }
 
-    const menu = new InteractiveMenu({
-      title: "Available Models",
-      items: models.map((m) => ({
-        label: m.fullId,
-        value: m.fullId,
-        icon: Emojis.brain,
-        color: Colors.cyan,
-      })),
-    });
+    const action = await menu({ title: "Select Model", items });
 
-    const selected = await menu.show();
-    this.currentModel = selected;
-    console.log(`\n${Colors.green}${Emojis.check} Model set to: ${selected}${Colors.reset}`);
-    await sleep(1000);
-  }
-
-  // ==========================================
-  // Agent Selection
-  // ==========================================
-
-  async selectAgent(): Promise<void> {
-    clearScreen();
-    console.log(`\n${Colors.bold}${Colors.cyan}${Emojis.robot} Select Agent${Colors.reset}\n`);
-
-    const agents = this.orchestrator.listAgents();
-
-    const menu = new InteractiveMenu({
-      title: "Available Agents",
-      items: agents.map((a) => ({
-        label: a.name,
-        value: a.name,
-        icon: Emojis.robot,
-        description: a.description,
-        color: Colors.green,
-      })),
-    });
-
-    const selected = await menu.show();
-    this.currentAgent = selected;
-    console.log(`\n${Colors.green}${Emojis.check} Agent set to: ${selected}${Colors.reset}`);
-    await sleep(1000);
-  }
-
-  // ==========================================
-  // Tools View
-  // ==========================================
-
-  async showTools(): Promise<void> {
-    clearScreen();
-    console.log(`\n${Colors.bold}${Colors.cyan}${Emojis.wrench} Available Tools${Colors.reset}\n`);
-
-    const tools = this.tools.list();
-
-    const toolLines = tools.map((t) => {
-      return `${Colors.green}${Emojis.check}${Colors.reset} ${Colors.bold}${t.definition.name}${Colors.reset}\n    ${Colors.dim}${t.definition.description}${Colors.reset}`;
-    });
-
-    console.log(drawBox(toolLines.join("\n\n"), {
-      title: `${tools.length} Tools`,
-      color: Colors.green,
-    }));
-
-    await prompt("\nPress Enter to continue...");
-  }
-
-  // ==========================================
-  // Settings
-  // ==========================================
-
-  async showSettings(): Promise<void> {
-    clearScreen();
-    console.log(`\n${Colors.bold}${Colors.cyan}${Emojis.gear} Settings${Colors.reset}\n`);
-
-    const menu = new InteractiveMenu({
-      title: "Settings",
-      items: [
-        {
-          label: "Change API Keys",
-          value: "keys",
-          icon: Emojis.key,
-          description: "Configure API keys for different providers",
-          color: Colors.yellow,
-        },
-        {
-          label: "Default Model",
-          value: "default_model",
-          icon: Emojis.brain,
-          description: `Current: ${this.currentModel}`,
-          color: Colors.cyan,
-        },
-        {
-          label: "Default Agent",
-          value: "default_agent",
-          icon: Emojis.robot,
-          description: `Current: ${this.currentAgent}`,
-          color: Colors.green,
-        },
-        {
-          label: "Back",
-          value: "back",
-          icon: Emojis.arrow,
-          color: Colors.gray,
-        },
-      ],
-    });
-
-    const choice = await menu.show();
-
-    switch (choice) {
-      case "keys":
-        await this.configureApiKeys();
-        break;
-      case "default_model":
-        await this.selectModel();
-        break;
-      case "default_agent":
-        await this.selectAgent();
-        break;
-      case "back":
-        return;
+    if (action === "__test__") {
+      await this.testProviders();
+    } else if (action !== "__back__") {
+      this.model = action;
+      clear();
+      console.log(`\n  ${c.green}✓${c.reset} Model set to ${c.cyan}${action}${c.reset}\n`);
+      await sleep(800);
     }
   }
 
-  private async configureApiKeys(): Promise<void> {
-    console.log(`\n${Colors.dim}Set API keys for different providers:${Colors.reset}\n`);
+  // ==========================================
+  // Test Provider Connection
+  // ==========================================
+
+  private async testProviders() {
+    clear();
+    console.log(`\n  ${c.bold}Testing Provider Connections${c.reset}\n`);
+
+    const providers = this.providers.listProviders();
+
+    for (const provider of providers) {
+      const spin = new Spinner(`Testing ${provider}...`);
+      spin.start();
+
+      try {
+        // Try a minimal chat request
+        const models = this.providers.listModels().filter((m) => m.provider === provider);
+        if (models.length === 0) {
+          spin.fail(`${provider}: No models registered`);
+          continue;
+        }
+
+        await this.providers.chat({
+          model: models[0].fullId,
+          messages: [{ role: "user", content: "Hi" }],
+          maxTokens: 5,
+        });
+
+        spin.stop(`${provider}: ${c.green}Connected${c.reset}`);
+      } catch (error: any) {
+        spin.fail(`${provider}: ${c.red}${error.message || "Failed"}${c.reset}`);
+      }
+    }
+
+    console.log();
+    await prompt({});
+  }
+
+  // ==========================================
+  // Agents Menu
+  // ==========================================
+
+  private async agentsMenu() {
+    const agents = this.orchestrator.listAgents();
+
+    const action = await menu({
+      title: "Select Agent",
+      items: agents.map((a) => ({
+        label: a.name,
+        value: a.name,
+        icon: "🤖",
+        desc: a.description,
+        color: c.magenta,
+      })),
+    });
+
+    if (action !== "__back__") {
+      this.agent = action;
+      clear();
+      console.log(`\n  ${c.green}✓${c.reset} Agent set to ${c.magenta}${action}${c.reset}\n`);
+      await sleep(800);
+    }
+  }
+
+  // ==========================================
+  // Tools Menu
+  // ==========================================
+
+  private async toolsMenu() {
+    clear();
+    const tools = this.tools.list();
+
+    const lines = tools.map((t) => `  ${c.green}✓${c.reset}  ${c.bold}${t.definition.name}${c.reset}  ${c.dim}${t.definition.description}${c.reset}`);
+
+    console.log(box(lines, { title: `${tools.length} Tools Available`, color: c.green }));
+    console.log();
+
+    await prompt({});
+  }
+
+  // ==========================================
+  // Settings Menu
+  // ==========================================
+
+  private async settingsMenu() {
+    const action = await menu({
+      title: "Settings",
+      items: [
+        { label: "Set API Keys", value: "keys", icon: "🔑", desc: "Configure provider API keys", color: c.yellow },
+        { label: `Default Model: ${this.model}`, value: "model", icon: "🧠", desc: "Change the default model", color: c.cyan },
+        { label: `Default Agent: ${this.agent}`, value: "agent", icon: "🤖", desc: "Change the default agent", color: c.magenta },
+        { label: "Back", value: "__back__", icon: "←", color: c.dim },
+      ],
+    });
+
+    if (action === "keys") {
+      await this.configureKeys();
+    } else if (action === "model") {
+      await this.modelsMenu();
+    } else if (action === "agent") {
+      await this.agentsMenu();
+    }
+  }
+
+  private async configureKeys() {
+    clear();
+    console.log(`\n  ${c.bold}Configure API Keys${c.reset}\n`);
+    console.log(`  ${c.dim}Press Enter to skip a provider${c.reset}\n`);
 
     const providers = ["anthropic", "openai", "google"];
 
     for (const provider of providers) {
-      const key = await prompt(`${provider} API key (Enter to skip):`);
+      const key = await prompt({ placeholder: `${provider} API key (Enter to skip)`, color: c.yellow });
       if (key) {
         this.providers.setApiKey(provider, key);
-        console.log(`${Colors.green}${Emojis.check} ${provider} key set!${Colors.reset}`);
+        console.log(`  ${c.green}✓${c.reset} ${provider} key saved\n`);
       }
     }
-  }
 
-  // ==========================================
-  // Start
-  // ==========================================
-
-  async start(): Promise<void> {
-    this.isRunning = true;
-    clearScreen();
-
-    // Animated startup
-    const spinner = new Spinner({ text: "Initializing Deepcode...", style: "rocket" });
-    spinner.start();
-
-    await sleep(1000);
-    spinner.updateText("Loading providers...");
-    await sleep(500);
-    spinner.updateText("Loading tools...");
-    await sleep(500);
-    spinner.updateText("Ready!");
-    await sleep(300);
-
-    spinner.stop(`${Emojis.party} Deepcode initialized!`);
-
-    await sleep(500);
-
-    await this.showMainMenu();
+    console.log(`\n  ${c.dim}Restart Deepcode for changes to take effect${c.reset}`);
+    await sleep(1500);
   }
 }

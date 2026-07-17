@@ -1,19 +1,21 @@
 // ==========================================
-// Terminal UI Core - Colors, Formatting, Animations
+// Deepcode TUI v2 - Modern Terminal Interface
 // ==========================================
 
-export const Colors = {
-  // Standard
+import * as readline from "readline";
+import { EventEmitter } from "events";
+
+// ==========================================
+// ANSI Helpers
+// ==========================================
+
+export const c = {
   reset: "\x1b[0m",
   bold: "\x1b[1m",
   dim: "\x1b[2m",
   italic: "\x1b[3m",
   underline: "\x1b[4m",
-  blink: "\x1b[5m",
-  inverse: "\x1b[7m",
-  strikethrough: "\x1b[9m",
 
-  // Foreground
   black: "\x1b[30m",
   red: "\x1b[31m",
   green: "\x1b[32m",
@@ -24,16 +26,13 @@ export const Colors = {
   white: "\x1b[37m",
   gray: "\x1b[90m",
 
-  // Bright foreground
   brightRed: "\x1b[91m",
   brightGreen: "\x1b[92m",
   brightYellow: "\x1b[93m",
   brightBlue: "\x1b[94m",
   brightMagenta: "\x1b[95m",
   brightCyan: "\x1b[96m",
-  brightWhite: "\x1b[97m",
 
-  // Background
   bgBlack: "\x1b[40m",
   bgRed: "\x1b[41m",
   bgGreen: "\x1b[42m",
@@ -42,259 +41,88 @@ export const Colors = {
   bgMagenta: "\x1b[45m",
   bgCyan: "\x1b[46m",
   bgWhite: "\x1b[47m",
-} as const;
+};
 
-export const Emojis = {
-  rocket: "🚀",
-  sparkles: "✨",
-  star: "⭐",
-  check: "✅",
-  cross: "❌",
-  warning: "⚠️",
-  info: "ℹ️",
-  arrow: "→",
-  bullet: "•",
-  diamond: "◆",
-  circle: "●",
-  square: "■",
-  triangle: "▲",
-  gear: "⚙️",
-  brain: "🧠",
-  code: "💻",
-  terminal: "\ufe92",
-  folder: "📁",
-  file: "📄",
-  search: "🔍",
-  link: "🔗",
-  clock: "🕐",
-  lightning: "⚡",
-  fire: "🔥",
-  wave: "👋",
-  party: "🎉",
-  robot: "🤖",
-  wrench: "🔧",
-  door: "🚪",
-  key: "🔑",
-  settings: "⚙️",
-  chat: "💬",
-  bell: "🔔",
-  trash: "🗑️",
-  save: "💾",
-  download: "⬇️",
-  upload: "⬆️",
-  refresh: "🔄",
-  lock: "🔒",
-  unlock: "🔓",
-  heart: "❤️",
-  thumbsUp: "👍",
-  thumbsDown: "👎",
-  flag: "🚩",
-  bookmark: "🔖",
-  tag: "🏷️",
-  pin: "📌",
-  eye: "👁️",
-  magnifier: "🔎",
-  lightbulb: "💡",
-  tools: "🛠️",
-  hammer: "🔨",
-  screwdriver: "🪛",
-  paintbrush: "🖌️",
-  palette: "🎨",
-  camera: "📷",
-  microphone: "🎤",
-  speaker: "🔊",
-  music: "🎵",
-  film: "🎬",
-  gamepad: "🎮",
-  puzzle: "🧩",
-  dice: "🎲",
-  cards: "🃏",
-  crystal: "🔮",
-  magic: "🪄",
-  wand: "🪄",
-  crown: "👑",
-  gem: "💎",
-  trophy: "🏆",
-  medal: "🏅",
-  ribbon: "🎀",
-  gift: "🎁",
-  balloon: "🎈",
-  confetti: "🎉",
-  partyPopper: "🎊",
-  fireworks: "🎆",
-  sparkler: "🎇",
-  dawn: "🌅",
-  sunset: "🌇",
-  rainbow: "🌈",
-  cloud: "☁️",
-  sun: "☀️",
-  moon: "🌙",
-  star2: "⭐",
-  comet: "☄️",
-  umbrella: "☂️",
-  snowflake: "❄️",
-  water: "💧",
-  fire2: "🔥",
-  tornado: "🌪️",
-  volcano: "🌋",
-  mountain: "🏔️",
-  camping: "🏕️",
-  beach: "🏖️",
-  palm: "🌴",
-  cactus: "🌵",
-  tree: "🌳",
-  flower: "🌸",
-  rose: "🌹",
-  tulip: "🌷",
-  seedling: "🌱",
-  herb: "🌿",
-  leaf: "🍃",
-  fallenLeaf: "🍂",
-  mushroom: "🍄",
-  nut: "🌰",
-  chestnut: "🌰",
-} as const;
+export const cstrip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
 // ==========================================
-// Animation Helpers
+// Terminal Control
 // ==========================================
 
-export async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function clear() {
+  process.stdout.write("\x1b[2J\x1b[H");
 }
 
-export async function typewriter(
-  text: string,
-  options?: {
-    speed?: number;
-    stream?: boolean;
-    onChar?: (char: string, index: number) => void;
-  }
-): Promise<void> {
-  const speed = options?.speed || 20;
-  for (let i = 0; i < text.length; i++) {
-    process.stdout.write(text[i]);
-    if (options?.onChar) options.onChar(text[i], i);
-    if (!options?.stream || text[i] !== " ") {
-      await sleep(speed);
-    }
+export function hideCursor() {
+  process.stdout.write("\x1b[?25l");
+}
+
+export function showCursor() {
+  process.stdout.write("\x1b[?25h");
+}
+
+export function moveUp(n: number) {
+  if (n > 0) process.stdout.write(`\x1b[${n}A`);
+}
+
+export function moveDown(n: number) {
+  if (n > 0) process.stdout.write(`\x1b[${n}B`);
+}
+
+export function clearLine() {
+  process.stdout.write("\x1b[2K\r");
+}
+
+export function clearLines(n: number) {
+  for (let i = 0; i < n; i++) {
+    moveUp(1);
+    clearLine();
   }
 }
 
 // ==========================================
-// Spinner Animation
+// Spinner
 // ==========================================
 
-const SPINNERS = {
-  dots: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-  line: ["-", "\\", "|", "/"],
-  dot: ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"],
-  star: ["✦", "✧", "✦", "✧"],
-  pulse: [" ◐", " ◑", " ◒", " ◓", " ◔", " ◕", " ◖", " ◗"],
-  brain: ["🧠", "💭", "🧠", "💭"],
-  rocket: ["🚀", "✈️", "🛫", "✈️", "🚀"],
-  wave: ["👋", "🤚", "🖐️", "✋", "🖖", "🖐️", "🤚", "👋"],
-} as const;
-
-export type SpinnerStyle = keyof typeof SPINNERS;
+const spinFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 export class Spinner {
-  private frames: readonly string[];
-  private frameIndex = 0;
-  private interval: ReturnType<typeof setInterval> | null = null;
-  private text: string;
-  private color: string;
-  private isActive = false;
+  private frame = 0;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private msg: string;
 
-  constructor(options?: {
-    text?: string;
-    style?: SpinnerStyle;
-    color?: string;
-  }) {
-    this.text = options?.text || "";
-    this.frames = SPINNERS[options?.style || "dots"];
-    this.color = options?.color || Colors.cyan;
+  constructor(msg = "") {
+    this.msg = msg;
   }
 
-  start(text?: string): void {
-    if (text) this.text = text;
-    this.isActive = true;
-    this.frameIndex = 0;
-
-    // Hide cursor
-    process.stdout.write("\x1b[?25l");
-
-    this.interval = setInterval(() => {
-      if (!this.isActive) return;
-      const frame = this.frames[this.frameIndex % this.frames.length];
-      process.stdout.write(`\r${this.color}${frame}${Colors.reset} ${this.text}   `);
-      this.frameIndex++;
+  start(msg?: string) {
+    if (msg) this.msg = msg;
+    hideCursor();
+    this.timer = setInterval(() => {
+      clearLine();
+      process.stdout.write(`${c.cyan}${spinFrames[this.frame % spinFrames.length]}${c.reset} ${c.dim}${this.msg}${c.reset}`);
+      this.frame++;
     }, 80);
   }
 
-  updateText(text: string): void {
-    this.text = text;
+  update(msg: string) {
+    this.msg = msg;
   }
 
-  stop(finalText?: string): void {
-    this.isActive = false;
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
-    }
-
-    // Show cursor
-    process.stdout.write("\x1b[?25h");
-
-    if (finalText) {
-      process.stdout.write(`\r${Colors.green}✓${Colors.reset} ${finalText}\n`);
-    } else {
-      process.stdout.write("\r" + " ".repeat(this.text.length + 10) + "\r");
-    }
+  stop(msg?: string) {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    clearLine();
+    showCursor();
+    if (msg) process.stdout.write(`${c.green}✓${c.reset} ${msg}\n`);
   }
 
-  fail(errorText: string): void {
-    this.isActive = false;
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
-    }
-    process.stdout.write("\x1b[?25h");
-    process.stdout.write(`\r${Colors.red}✗${Colors.reset} ${errorText}\n`);
-  }
-}
-
-// ==========================================
-// Progress Bar
-// ==========================================
-
-export class ProgressBar {
-  private total: number;
-  private current = 0;
-  private width: number;
-  private color: string;
-
-  constructor(options?: { total?: number; width?: number; color?: string }) {
-    this.total = options?.total || 100;
-    this.width = options?.width || 30;
-    this.color = options?.color || Colors.cyan;
-  }
-
-  update(current: number, label?: string): void {
-    this.current = current;
-    const percent = Math.round((current / this.total) * 100);
-    const filled = Math.round((current / this.total) * this.width);
-    const empty = this.width - filled;
-
-    const bar = `${this.color}${"█".repeat(filled)}${Colors.dim}${"░".repeat(empty)}${Colors.reset}`;
-    const text = label || `${percent}%`;
-
-    process.stdout.write(`\r  ${bar} ${text}   `);
-  }
-
-  complete(label?: string): void {
-    this.update(this.total, label || "100%");
-    process.stdout.write("\n");
+  fail(msg: string) {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    clearLine();
+    showCursor();
+    process.stdout.write(`${c.red}✗${c.reset} ${msg}\n`);
   }
 }
 
@@ -302,286 +130,249 @@ export class ProgressBar {
 // Box Drawing
 // ==========================================
 
-export function drawBox(
-  content: string,
-  options?: {
-    title?: string;
-    color?: string;
-    padding?: number;
-    width?: number;
+export function box(lines: string[], opts?: { title?: string; width?: number; color?: string }) {
+  const color = opts?.color || c.cyan;
+  const w = opts?.width || Math.max(...lines.map((l) => cstrip(l).length), opts?.title?.length || 0) + 4;
+  const bar = "─".repeat(w);
+  const out: string[] = [];
+
+  out.push(`${color}╭${bar}╮${c.reset}`);
+  if (opts?.title) {
+    const pad = w - opts.title.length;
+    const lp = Math.floor(pad / 2);
+    out.push(`${color}│${c.reset}${" ".repeat(lp)}${c.bold}${opts.title}${c.reset}${" ".repeat(pad - lp)}${color}│${c.reset}`);
+    out.push(`${color}├${bar}┤${c.reset}`);
   }
-): string {
-  const color = options?.color || Colors.cyan;
-  const padding = options?.padding || 1;
-  const lines = content.split("\n");
-  const maxWidth = options?.width || Math.max(...lines.map((l) => stripAnsi(l).length), options?.title?.length || 0);
-  const innerWidth = maxWidth + padding * 2;
-
-  const top = `${color}╭${"─".repeat(innerWidth)}╮${Colors.reset}`;
-  const bottom = `${color}╰${"─".repeat(innerWidth)}╯${Colors.reset}`;
-  const emptyLine = `${color}│${" ".repeat(innerWidth)}│${Colors.reset}`;
-
-  const result: string[] = [top];
-
-  if (options?.title) {
-    const titlePad = Math.max(0, innerWidth - options.title.length);
-    const leftPad = Math.floor(titlePad / 2);
-    const rightPad = titlePad - leftPad;
-    result.push(
-      `${color}│${" ".repeat(leftPad)}${Colors.bold}${options.title}${Colors.reset}${color}${" ".repeat(rightPad)}│${Colors.reset}`
-    );
-    result.push(`${color}├${"─".repeat(innerWidth)}┤${Colors.reset}`);
-  }
-
   for (const line of lines) {
-    const lineLen = stripAnsi(line).length;
-    const pad = Math.max(0, innerWidth - lineLen - padding * 2);
-    result.push(
-      `${color}│${" ".repeat(padding)}${line}${" ".repeat(pad + padding)}${Colors.reset}${color}│${Colors.reset}`
-    );
+    const len = cstrip(line).length;
+    const pad = Math.max(0, w - len - 2);
+    out.push(`${color}│${c.reset} ${line}${" ".repeat(pad)}${color}│${c.reset}`);
   }
-
-  result.push(bottom);
-  return result.join("\n");
-}
-
-function stripAnsi(str: string): string {
-  return str.replace(/\x1b\[[0-9;]*m/g, "");
+  out.push(`${color}╰${bar}╯${c.reset}`);
+  return out.join("\n");
 }
 
 // ==========================================
-// Logo / Banner
+// Banner
 // ==========================================
 
-export function drawLogo(): string {
-  const logo = `
-${Colors.bold}${Colors.cyan} ______   _______  _______  _______  _______  _______  ______   _______
+export function banner() {
+  return `${c.bold}${c.cyan} ______   _______  _______  _______  _______  _______  ______   _______
 (  __  \\ (  ____ \\(  ____ \\(  ____ )(  ____ \\(  ___  )(  __  \\ (  ____ \\
 | (  \\  )| (    \\/| (    \\/| (    )|| (    \\/| (   ) || (  \\  )| (    \\/
 | |   ) || (__    | (__    | (____)|| |      | |   | || |   ) || (__    
 | |   | ||  __)   |  __)   |  _____)| |      | |   | || |   | ||  __)   
 | |   ) || (      | (      | (      | |      | |   | || |   ) || (      
 | (__/  )| (____/\\| (____/\\| )      | (____/\\| (___) || (__/  )| (____/\\
-(______/ (_______/(_______/|/       (_______/(_______)(______/ (_______/
-${Colors.reset}${Colors.dim}                  Agentic Coding Assistant for Termux${Colors.reset}`;
-
-  return logo;
+(______/ (_______/(_______/|/       (_______/(_______)(______/ (_______/${c.reset}`;
 }
 
 // ==========================================
-// Status Bar
+// Status Line
 // ==========================================
 
-export function drawStatusBar(options?: {
-  model?: string;
-  agent?: string;
-  tokens?: number;
-  session?: string;
-}): string {
-  const parts: string[] = [];
-
-  if (options?.model) {
-    parts.push(`${Colors.cyan}Model:${Colors.reset} ${options.model}`);
-  }
-  if (options?.agent) {
-    parts.push(`${Colors.green}Agent:${Colors.reset} ${options.agent}`);
-  }
-  if (options?.tokens) {
-    parts.push(`${Colors.yellow}Tokens:${Colors.reset} ${options.tokens.toLocaleString()}`);
-  }
-  if (options?.session) {
-    parts.push(`${Colors.dim}Session:${Colors.reset} ${options.session.slice(0, 8)}`);
-  }
-
-  const line = parts.join(` ${Colors.dim}│${Colors.reset} `);
-  const width = stripAnsi(line).length;
-  const termWidth = process.stdout.columns || 80;
-  const pad = Math.max(0, termWidth - width - 2);
-
-  return `\n${Colors.dim}${"─".repeat(termWidth - 1)}${Colors.reset}\n${line}${" ".repeat(pad)}\n${Colors.dim}${"─".repeat(termWidth - 1)}${Colors.reset}`;
+export function statusLine(parts: { label: string; value: string; color?: string }[]) {
+  const segs = parts.map((p) => `${c.dim}${p.label}:${c.reset} ${p.color || c.white}${p.value}${c.reset}`);
+  return segs.join(`  ${c.dim}│${c.reset}  `);
 }
 
 // ==========================================
-// Interactive Menu
+// Key Input (raw mode)
+// ==========================================
+
+export type KeyName = "up" | "down" | "enter" | "escape" | "ctrl+c" | "tab" | "backspace" | "char";
+
+export interface Key {
+  name: KeyName;
+  char?: string;
+}
+
+export function onKey(handler: (key: Key) => void): () => void {
+  if (process.stdin.setRawMode) process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding("utf-8");
+
+  const listener = (data: string) => {
+    const buf = Buffer.from(data);
+    const str = data;
+
+    if (buf[0] === 3) return handler({ name: "ctrl+c" });
+    if (buf[0] === 27 && buf[1] === 91) {
+      if (buf[2] === 65) return handler({ name: "up" });
+      if (buf[2] === 66) return handler({ name: "down" });
+      if (buf[2] === 67) return handler({ name: "tab" });
+      if (buf[2] === 68) return handler({ name: "backspace" });
+    }
+    if (buf[0] === 13) return handler({ name: "enter" });
+    if (buf[0] === 27) return handler({ name: "escape" });
+    if (buf[0] === 9) return handler({ name: "tab" });
+    if (buf[0] === 127) return handler({ name: "backspace" });
+
+    handler({ name: "char", char: str });
+  };
+
+  process.stdin.on("data", listener);
+  return () => {
+    process.stdin.removeListener("data", listener);
+    if (process.stdin.setRawMode) process.stdin.setRawMode(false);
+    process.stdin.pause();
+    showCursor();
+  };
+}
+
+// ==========================================
+// Menu (Arrow Navigation)
 // ==========================================
 
 export interface MenuItem {
   label: string;
   value: string;
-  description?: string;
+  desc?: string;
   icon?: string;
   color?: string;
-  disabled?: boolean;
 }
 
-export class InteractiveMenu {
-  private items: MenuItem[];
-  private selectedIndex = 0;
-  private title: string;
-  private columns: number;
-
-  constructor(options: {
-    title: string;
-    items: MenuItem[];
-    columns?: number;
-  }) {
-    this.title = options.title;
-    this.items = options.items;
-    this.columns = options.columns || 1;
-  }
-
-  async show(): Promise<string> {
-    // Hide cursor
-    process.stdout.write("\x1b[?25l");
+export async function menu(opts: { title: string; items: MenuItem[] }): Promise<string> {
+  return new Promise((resolve) => {
+    let idx = 0;
+    const items = opts.items;
+    const totalLines = items.length + 4; // title + padding
 
     const render = () => {
-      // Move up and clear
-      process.stdout.write("\x1b[2J\x1b[H");
+      clearLines(totalLines + 2);
+      process.stdout.write(`${c.bold}${c.cyan}  ${opts.title}${c.reset}\n\n`);
 
-      console.log(`\n${Colors.bold}${Colors.cyan}${this.title}${Colors.reset}\n`);
-      console.log(`${Colors.dim}Use ↑/↓ to navigate, Enter to select, q to quit${Colors.reset}\n`);
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const sel = i === idx;
+        const prefix = sel ? `${c.green}${c.bold}▸ ` : "  ";
+        const icon = item.icon ? `${item.icon} ` : "";
+        const color = sel ? (item.color || c.white) : c.dim;
+        const suffix = c.reset;
 
-      const cols = this.columns;
-      const rows = Math.ceil(this.items.length / cols);
-
-      for (let row = 0; row < rows; row++) {
-        let line = "";
-        for (let col = 0; col < cols; col++) {
-          const idx = row + col * rows;
-          if (idx >= this.items.length) break;
-
-          const item = this.items[idx];
-          const isSelected = idx === this.selectedIndex;
-          const prefix = isSelected ? `${Colors.bold}${Colors.green}▸ ` : "  ";
-          const suffix = isSelected ? Colors.reset : item.disabled ? Colors.dim : "";
-          const icon = item.icon ? `${item.icon} ` : "";
-          const color = item.color || "";
-
-          line += `${prefix}${color}${icon}${item.label}${suffix}    `;
-        }
-        console.log(line);
+        process.stdout.write(`${prefix}${color}${icon}${item.label}${suffix}\n`);
       }
 
-      // Show description of selected item
-      const selected = this.items[this.selectedIndex];
-      if (selected.description) {
-        console.log(`\n${Colors.dim}${selected.description}${Colors.reset}`);
+      if (items[idx].desc) {
+        process.stdout.write(`\n  ${c.dim}${items[idx].desc}${c.reset}`);
       }
+
+      process.stdout.write(`\n\n  ${c.dim}↑↓ navigate  ↵ select  esc back${c.reset}`);
     };
 
     render();
 
-    return new Promise((resolve) => {
-      const onKey = (data: Buffer) => {
-        const key = data.toString();
-
-        if (key === "\x1b[A") {
-          // Up arrow
-          this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-          render();
-        } else if (key === "\x1b[B") {
-          // Down arrow
-          this.selectedIndex = Math.min(this.items.length - 1, this.selectedIndex + 1);
-          render();
-        } else if (key === "\r" || key === "\n") {
-          // Enter
-          cleanup();
-          resolve(this.items[this.selectedIndex].value);
-        } else if (key === "q" || key === "\x03") {
-          // q or Ctrl+C
-          cleanup();
-          process.exit(0);
-        }
-      };
-
-      const cleanup = () => {
-        process.stdin.removeListener("data", onKey);
-        process.stdin.setRawMode?.(false);
-        process.stdin.pause();
-        // Show cursor
-        process.stdout.write("\x1b[?25h");
-      };
-
-      process.stdin.setRawMode?.(true);
-      process.stdin.resume();
-      process.stdin.on("data", onKey);
+    const cleanup = onKey((key) => {
+      if (key.name === "up") {
+        idx = (idx - 1 + items.length) % items.length;
+        render();
+      } else if (key.name === "down") {
+        idx = (idx + 1) % items.length;
+        render();
+      } else if (key.name === "enter") {
+        cleanup();
+        resolve(items[idx].value);
+      } else if (key.name === "escape" || key.name === "ctrl+c") {
+        cleanup();
+        resolve("__back__");
+      }
     });
-  }
+  });
 }
 
 // ==========================================
-// Streaming Text Display
+// Input Prompt
 // ==========================================
 
-export class StreamingDisplay {
-  private buffer = "";
-  private isStreaming = false;
-  private lastLength = 0;
+export async function prompt(opts: { placeholder?: string; color?: string }): Promise<string> {
+  return new Promise((resolve) => {
+    const color = opts.color || c.green;
+    let input = "";
+    let cursorPos = 0;
 
-  start(): void {
-    this.isStreaming = true;
-    this.buffer = "";
-    this.lastLength = 0;
+    const render = () => {
+      clearLine();
+      const before = input.slice(0, cursorPos);
+      const after = input.slice(cursorPos);
+      process.stdout.write(`${color}❯${c.reset} ${before}${c.dim}${after}${c.reset}`);
+    };
+
+    render();
+
+    const cleanup = onKey((key) => {
+      if (key.name === "enter") {
+        cleanup();
+        resolve(input.trim());
+      } else if (key.name === "ctrl+c") {
+        cleanup();
+        process.exit(0);
+      } else if (key.name === "backspace") {
+        if (cursorPos > 0) {
+          input = input.slice(0, cursorPos - 1) + input.slice(cursorPos);
+          cursorPos--;
+          render();
+        }
+      } else if (key.name === "escape") {
+        cleanup();
+        resolve("");
+      } else if (key.char && key.char.length === 1) {
+        input += key.char;
+        cursorPos++;
+        render();
+      }
+    });
+  });
+}
+
+// ==========================================
+// Streaming Display (word-by-word)
+// ==========================================
+
+export class StreamDisplay {
+  private buf = "";
+  private lines = 0;
+
+  start() {
+    this.buf = "";
+    this.lines = 0;
   }
 
-  append(text: string): void {
-    if (!this.isStreaming) return;
+  append(text: string) {
+    this.buf += text;
+    // Render the new text
+    process.stdout.write(text);
+  }
 
-    // Clear previous output
-    if (this.lastLength > 0) {
-      const lines = this.buffer.split("\n");
-      process.stdout.write(`\x1b[${lines.length}A`);
-      for (let i = 0; i < lines.length; i++) {
-        process.stdout.write(`\x1b[2K\r`);
-        if (i < lines.length - 1) process.stdout.write("\n");
-      }
-      process.stdout.write(`\x1b[${lines.length - 1}A`);
-    }
-
-    this.buffer += text;
-
-    // Print current state
-    process.stdout.write(this.buffer);
-    this.lastLength = this.buffer.split("\n").length;
+  getBuffer() {
+    return this.buf;
   }
 
   finish(): string {
-    this.isStreaming = false;
-    const result = this.buffer;
-    this.buffer = "";
-    this.lastLength = 0;
-    return result;
+    process.stdout.write("\n");
+    return this.buf;
   }
 }
 
 // ==========================================
-// Clear Screen
+// Helpers
 // ==========================================
 
-export function clearScreen(): void {
-  process.stdout.write("\x1b[2J\x1b[H");
+export async function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-// ==========================================
-// Prompt
-// ==========================================
-
-export async function prompt(question: string): Promise<string> {
-  const readline = await import("readline");
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(`${Colors.cyan}?${Colors.reset} ${Colors.bold}${question}${Colors.reset} `, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
+export function termWidth(): number {
+  return process.stdout.columns || 80;
 }
 
-export async function confirm(question: string): Promise<boolean> {
-  const answer = await prompt(`${question} (y/n)`);
-  return answer.toLowerCase() === "y" || answer.toLowerCase() === "yes";
+export function pad(str: string, len: number, align: "left" | "right" = "left") {
+  const diff = len - cstrip(str).length;
+  if (diff <= 0) return str;
+  return align === "left" ? str + " ".repeat(diff) : " ".repeat(diff) + str;
+}
+
+export function truncate(str: string, max: number) {
+  const stripped = cstrip(str);
+  if (stripped.length <= max) return str;
+  return str.slice(0, max - 3) + "...";
 }
