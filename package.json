@@ -1,0 +1,29 @@
+{
+  "name": "deepcode",
+  "version": "0.2.0",
+  "description": "Agentic coding assistant CLI for Termux",
+  "type": "module",
+  "main": "./dist/cli/index.js",
+  "bin": {
+    "deepcode": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "node ./node_modules/typescript/bin/tsc",
+    "dev": "tsx src/cli/index.ts",
+    "start": "node dist/cli/index.js",
+    "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
+    "test": "node --test src/**/*.test.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["ai", "coding", "agent", "termux", "cli"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  }
+}
