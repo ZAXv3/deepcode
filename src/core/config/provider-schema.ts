@@ -85,7 +85,7 @@ export function parseProviderConfig(config: any): {
       if (value && typeof value === "object" && !Array.isArray(value)) {
         const opts = value as Record<string, unknown>;
         if ("apiKey" in opts) {
-          apiKeys[key] = opts.apiKey as string;
+          apiKeys[key] = resolveEnvValue(opts.apiKey as string);
         }
         if ("baseUrl" in opts && "name" in opts) {
           customProviders.push(value as CustomProviderConfig);
@@ -101,7 +101,7 @@ export function parseProviderConfig(config: any): {
     if (value && typeof value === "object" && !Array.isArray(value)) {
       const opts = value as Record<string, unknown>;
       if ("apiKey" in opts) {
-        apiKeys[key] = opts.apiKey as string;
+        apiKeys[key] = resolveEnvValue(opts.apiKey as string);
       }
       if ("baseUrl" in opts && "name" in opts) {
         customProviders.push(value as CustomProviderConfig);
@@ -109,5 +109,25 @@ export function parseProviderConfig(config: any): {
     }
   }
 
+  // Also resolve env: in builtin keys
+  for (const [key, value] of Object.entries(apiKeys)) {
+    apiKeys[key] = resolveEnvValue(value);
+  }
+
   return { apiKeys, customProviders, modelAliases };
+}
+
+// Resolve "env:VAR_NAME" or "env:VAR_NAME|default" syntax
+function resolveEnvValue(value: string): string {
+  if (!value.startsWith("env:")) return value;
+  const varSpec = value.slice(4);
+  const pipeIdx = varSpec.indexOf("|");
+  if (pipeIdx === -1) {
+    // env:VAR_NAME
+    return process.env[varSpec] || "";
+  }
+  // env:VAR_NAME|default
+  const varName = varSpec.slice(0, pipeIdx);
+  const defaultVal = varSpec.slice(pipeIdx + 1);
+  return process.env[varName] || defaultVal;
 }

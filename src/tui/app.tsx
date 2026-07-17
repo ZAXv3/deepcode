@@ -97,12 +97,13 @@ export function DeepcodeApp({ providers, orchestrator, tools }: Props) {
 
         (async () => {
           try {
-            if (!session) {
-              const sid = orchestrator.createSession(agent);
+            let sid = session?.id;
+            if (!sid) {
+              sid = orchestrator.createSession(agent);
               setSession(orchestrator.getSession(sid)!);
             }
             const res = await orchestrator.processMessage(
-              session?.id || "",
+              sid,
               userMsg,
               { model }
             );
