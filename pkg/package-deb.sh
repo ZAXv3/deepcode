@@ -37,13 +37,17 @@ PREFIX="$DEB_DIR/data/data/com.termux/files/usr"
 # Go to project directory
 cd "$PROJECT_DIR"
 
-# Install dependencies
+# Install dependencies (including devDependencies for build)
 echo -e "${YELLOW}[*] Installing dependencies...${NC}"
-npm install --production 2>&1 | tail -3
+npm install 2>&1 | tail -3
 
-# Build TypeScript using full path
+# Build TypeScript
 echo -e "${YELLOW}[*] Building TypeScript...${NC}"
-node ./node_modules/typescript/bin/tsc 2>&1 | tail -5 || true
+npm run build 2>&1 | tail -5 || true
+
+# Remove devDependencies to save space
+echo -e "${YELLOW}[*] Cleaning up dev dependencies...${NC}"
+npm prune --production 2>&1 | tail -3
 
 # Copy files
 echo -e "${YELLOW}[*] Copying files...${NC}"

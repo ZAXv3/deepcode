@@ -60,14 +60,18 @@ else
     fi
 fi
 
-# Install dependencies
+# Install dependencies (including devDependencies for build)
 echo -e "${YELLOW}[*] Installing dependencies...${NC}"
 cd "${INSTALL_DIR}"
-npm install --production
+npm install
 
 # Build
 echo -e "${YELLOW}[*] Building Deepcode...${NC}"
 npm run build
+
+# Remove devDependencies to save space
+echo -e "${YELLOW}[*] Cleaning up dev dependencies...${NC}"
+npm prune --production
 
 # Create wrapper script
 echo -e "${YELLOW}[*] Creating wrapper script...${NC}"
